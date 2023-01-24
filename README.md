@@ -9,6 +9,16 @@ Server for a minimal layer 3 tunnel over http(s).
 
 - [Libtins](http://libtins.github.io/download/) (optional, will fallback to Scapy (slow) if not installed)
 
+### RST Packets
+
+Because the Linux kernel sends a `RST` to connections it did not establish, use the following command to ensure that outgoing packets are sent successfully:
+
+```shell
+sudo iptables -A OUTPUT -p tcp --tcp-flags RST RST -s <local address> -j DROP
+```
+
+[See here](https://stackoverflow.com/questions/9058052/unwanted-rst-tcp-packet-with-scapy) for more information.
+
 ## Installation
 
 ```shell
