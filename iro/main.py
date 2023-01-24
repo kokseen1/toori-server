@@ -69,24 +69,39 @@ async def handle_outbound(sid, data):
     if pkt.haslayer(TCP) or pkt.haslayer(UDP):
 
         # Check if existing mapping exists
-        fake_sport = forward_nat.get((pkt.sport, sid))
+        # For O(1) lookup for existing connections instead of using the loop below
+        fake_sport = forward_nat.get((pkt.sport, sid, pkt.dst, pkt.dport))
 
         if fake_sport is None:
+            decrement = False
+            # New first-time connection
 
             # Try mapping to the real port first
-            pkt.sport = fake_sport = pkt.sport
+            fake_sport = pkt.sport
 
             while True:
 
-                mapping = return_nat.get(fake_sport)
-                if mapping is not None:
-                    # Increment and try again
-                    fake_sport += 1
+                # Check if there is an existing connection from proxy:sport -> dst:dport
+                rnat_value = return_nat.get((fake_sport, pkt.dst, pkt.dport))
+
+                if rnat_value is not None:
+                    # Increment and try the next port
+
+                    if fake_sport == 65535:
+                        decrement = True
+
+                    if decrement:
+                        fake_sport -= 1
+                    else:
+                        fake_sport += 1
+
                     continue
 
                 # Port is available, create entry and break loop
-                return_nat[fake_sport] = (pkt.sport, sid)
-                forward_nat[(pkt.sport, sid)] = fake_sport
+
+                # proxy:sport -> dst:dport : client:sport, sid
+                return_nat[(fake_sport, pkt.dst, pkt.dport)] = (pkt.sport, sid)
+                forward_nat[(pkt.sport, sid, pkt.dst, pkt.dport)] = fake_sport
                 break
 
         pkt.sport = fake_sport
@@ -109,13 +124,13 @@ def connect(sid, environ):
 def disconnect(sid):
     print("disconnect ", sid)
 
-    for fake_sport, mapping in return_nat.copy().items():
-        if sid == mapping[1]:
-            del return_nat[fake_sport]
+    for rnat_key, rnat_value in return_nat.copy().items():
+        if sid == rnat_value[1]:
+            del return_nat[rnat_key]
 
-    for mapping in forward_nat.copy().keys():
-        if sid == mapping[1]:
-            del forward_nat[mapping]
+    for fnat_key in forward_nat.copy().keys():
+        if sid == fnat_key[1]:
+            del forward_nat[fnat_key]
 
 
 def handle_inbound_packet(pkt):
@@ -135,13 +150,13 @@ async def background_sender(app):
 
         if pkt.haslayer(TCP) or pkt.haslayer(UDP):
 
-            mapping = return_nat.get(pkt.dport)
+            rnat_value = return_nat.get((pkt.dport, pkt.src, pkt.sport))
 
             # Incoming packet without mapping
-            if mapping is None:
+            if rnat_value is None:
                 continue
 
-            pkt.dport, sid = mapping
+            pkt.dport, sid = rnat_value
 
         await sio.emit("in", bytes(pkt), to=sid)
 
