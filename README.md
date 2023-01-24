@@ -12,7 +12,7 @@ Server for a minimal layer 3 tunnel over http(s).
 ## Installation
 
 ```shell
-pip install toori-server
+pip3 install toori-server --no-binary :all:
 ```
 
 ## Usage
