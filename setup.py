@@ -4,7 +4,7 @@ from setuptools import setup
 import pathlib
 import subprocess
 
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 
 # The main interface is through Pybind11Extension.
 # * You can add cxx_std=11/14/17, and then build_ext can be removed.
@@ -26,7 +26,7 @@ if "libtins" in subprocess.run(
             ["iro/main.cpp"],
             # Example: passing in the version to the compiled code
             # define_macros=[("VERSION_INFO", __version__)],
-            libraries=["tins"],  
+            libraries=["tins"],
         ),
     )
 
@@ -44,6 +44,14 @@ setup(
     cmdclass={"build_ext": build_ext},
     zip_safe=False,
     python_requires=">=3.7",
+    data_files=[
+        (
+            "iro",
+            [
+                "iro/main.cpp",
+            ],
+        )
+    ],
     include_package_data=True,
     packages=["iro"],
     package_dir={
