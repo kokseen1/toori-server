@@ -1,3 +1,5 @@
+import struct
+import socket
 from collections import deque
 import socketio
 from scapy.all import (
@@ -28,7 +30,9 @@ packets = deque()
 
 return_nat = dict()
 forward_nat = dict()
-local_ip_map = dict()
+virtual_ip_map = dict()
+
+NEXT_VIP = 0xC6120000
 
 
 try:
@@ -61,9 +65,11 @@ async def handle_outbound(sid, data):
     pkt = IP(data)
 
     # Virtual LAN
-    target_sid = local_ip_map.get(pkt.dst)
-    if target_sid is not None:
-        await sio.emit("in", data, to=target_sid)
+    vtarget = virtual_ip_map.get(pkt.dst)
+    if vtarget is not None:
+        pkt.src = virtual_ip_map.get((pkt.src, sid))
+        pkt.dst, target_sid = vtarget
+        await sio.emit("in", bytes(pkt), to=target_sid)
         return
 
     if pkt.haslayer(TCP) or pkt.haslayer(UDP):
@@ -110,9 +116,20 @@ async def handle_outbound(sid, data):
     inj_fn(pkt)
 
 
+def hextoa(addr_hex):
+    return socket.inet_ntoa(struct.pack(">I", addr_hex))
+
+
 @sio.on("announce_ip")
-def save_local_ip(sid, data):
-    local_ip_map[data] = sid
+async def save_local_ip(sid, local_ip):
+    global NEXT_VIP
+    NEXT_VIP += 1
+    virtual_ip = hextoa(NEXT_VIP)
+
+    virtual_ip_map[virtual_ip] = (local_ip, sid)
+    virtual_ip_map[(local_ip, sid)] = virtual_ip
+
+    await sio.emit("designate", f"{virtual_ip}", to=sid)
 
 
 @sio.on("connect")
