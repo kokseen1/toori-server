@@ -120,26 +120,42 @@ def hextoa(addr_hex):
     return socket.inet_ntoa(struct.pack(">I", addr_hex))
 
 
-@sio.on("announce_ip")
-async def save_local_ip(sid, local_ip):
-    global NEXT_VIP
-    NEXT_VIP += 1
-    virtual_ip = hextoa(NEXT_VIP)
-
+async def assign(sid, local_ip, virtual_ip):
     virtual_ip_map[virtual_ip] = (local_ip, sid)
     virtual_ip_map[(local_ip, sid)] = virtual_ip
+    virtual_ip_map[sid] = virtual_ip
 
     await sio.emit("designate", f"{virtual_ip}", to=sid)
 
 
 @sio.on("connect")
-def connect(sid, environ):
+async def connect(sid, environ, auth):
     print("connect ", sid)
+    virtual_ip = auth.get("req_ip")
+    local_ip = auth.get("loc_ip")
+    if virtual_ip is None or local_ip is None:
+        # No vip
+        return True
+
+    if virtual_ip.startswith("198.18.0.") and virtual_ip_map.get(virtual_ip) is None:
+        await assign(sid, local_ip, virtual_ip)
+
+    else:
+        await sio.emit("message", "Requested IP invalid/already in taken")
+        return False
 
 
 @sio.on("disconnect")
 def disconnect(sid):
     print("disconnect ", sid)
+
+    virtual_ip = virtual_ip_map.get(sid)
+    if sid is not None:
+        vip_map_value = virtual_ip_map.get(virtual_ip)
+        del virtual_ip_map[vip_map_value]
+        del virtual_ip_map[virtual_ip]
+        del virtual_ip_map[sid]
+
 
     for rnat_key, rnat_value in return_nat.copy().items():
         if sid == rnat_value[1]:
