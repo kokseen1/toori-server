@@ -125,7 +125,7 @@ async def assign(sid, local_ip, virtual_ip):
     virtual_ip_map[(local_ip, sid)] = virtual_ip
     virtual_ip_map[sid] = virtual_ip
 
-    await sio.emit("designate", f"{virtual_ip}", to=sid)
+    await sio.emit("message", f"Virtual IP: {virtual_ip}", to=sid)
 
 
 @sio.on("connect")
@@ -141,7 +141,7 @@ async def connect(sid, environ, auth):
         await assign(sid, local_ip, virtual_ip)
 
     else:
-        await sio.emit("message", "Requested IP invalid/already in taken")
+        await sio.emit("message", "Requested IP invalid/already in taken", to=sid)
         return False
 
 
