@@ -12,3 +12,4 @@ RUN apt-get install -y iptables
 COPY ./docker-entrypoint.sh /
 RUN chmod +x /docker-entrypoint.sh
 ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["80"]
