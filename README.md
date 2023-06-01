@@ -38,3 +38,17 @@ Example with HTTPS:
 ```shell
 iro 443 -c "/etc/letsencrypt/live/toori.server/"
 ```
+
+### Docker
+
+Build the image:
+
+```shell
+sudo docker build . -t toori-server
+```
+
+Run the container:
+
+```shell
+sudo docker run -d --cap-add=NET_ADMIN -p 80:80 toori-server
+```
