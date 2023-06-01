@@ -6,29 +6,9 @@
 
 Server for a minimal layer 3 tunnel over http(s).
 
-## Prerequisites
-
-- [Libtins](http://libtins.github.io/download/) (optional, will fallback to Scapy (slow) if not installed)
-
-### RST Packets
-
-Because the Linux kernel sends a `RST` to connections it did not establish, use the following command to ensure that outgoing packets are sent successfully:
-
-```shell
-sudo iptables -A OUTPUT -p tcp --tcp-flags RST RST -s <local address> -j DROP
-```
-
-[See here](https://stackoverflow.com/questions/9058052/unwanted-rst-tcp-packet-with-scapy) for more information.
-
-## Installation
-
-```shell
-pip3 install toori-server --no-binary :all:
-```
-
 ## Deploying with Docker
 
-Instead of installing toori-server on the host, it can alternatively be deployed as a Docker container.
+Instead of installing toori-server on the host, it can be deployed as a Docker container with much convenience.
 
 Pull from GHCR:
 
@@ -51,10 +31,30 @@ iro 443 -c /path/to/certs/
 # iro 80
 ```
 
-Run the container:
+Run the container with a bind mount:
 
 ```shell
-docker run -d -v /etc/letsencrypt:/path/to/certs --cap-add=NET_ADMIN -p 443:443 ghcr.io/kokseen1/toori-server
+sudo docker run -d -v /etc/letsencrypt:/path/to/certs --cap-add=NET_ADMIN -p 443:443 ghcr.io/kokseen1/toori-server
+```
+
+## Prerequisites
+
+- [Libtins](http://libtins.github.io/download/) (optional, will fallback to Scapy (slow) if not installed)
+
+### RST Packets
+
+Because the Linux kernel sends a `RST` to connections it did not establish, use the following command to ensure that outgoing packets are sent successfully:
+
+```shell
+sudo iptables -A OUTPUT -p tcp --tcp-flags RST RST -s <local address> -j DROP
+```
+
+[See here](https://stackoverflow.com/questions/9058052/unwanted-rst-tcp-packet-with-scapy) for more information.
+
+## Installation
+
+```shell
+pip3 install toori-server --no-binary :all:
 ```
 
 ## Usage
