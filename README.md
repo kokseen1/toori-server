@@ -24,17 +24,16 @@ sudo docker run -d --cap-add=NET_ADMIN -p 80:80 ghcr.io/kokseen1/toori-server
 
 #### HTTPS
 
-To deploy with HTTPS, modify `docker-entrypoint.sh` to point to the certs directory:
+To deploy with HTTPS, run the container with a bind mount and pass the port and certs directory as arguments:
 
 ```shell
-iro 443 -c /path/to/certs/
-# iro 80
+sudo docker run -d -v /etc/letsencrypt:/etc/letsencrypt --cap-add=NET_ADMIN -p 443:443 ghcr.io/kokseen1/toori-server 443 /etc/letsencrypt/live/toori.server/
 ```
 
-Run the container with a bind mount:
+## Installation
 
 ```shell
-sudo docker run -d -v /etc/letsencrypt:/path/to/certs --cap-add=NET_ADMIN -p 443:443 ghcr.io/kokseen1/toori-server
+pip3 install toori-server --no-binary :all:
 ```
 
 ## Prerequisites
@@ -50,12 +49,6 @@ sudo iptables -A OUTPUT -p tcp --tcp-flags RST RST -s <local address> -j DROP
 ```
 
 [See here](https://stackoverflow.com/questions/9058052/unwanted-rst-tcp-packet-with-scapy) for more information.
-
-## Installation
-
-```shell
-pip3 install toori-server --no-binary :all:
-```
 
 ## Usage
 
