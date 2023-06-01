@@ -1,6 +1,7 @@
 # Iro 
 
-[![PyPI Release](https://github.com/kokseen1/Iro/actions/workflows/release.yml/badge.svg)](https://github.com/kokseen1/Iro/actions/workflows/release.yml)
+[![GHCR](https://github.com/kokseen1/toori-server/actions/workflows/ghcr.yml/badge.svg)](https://github.com/kokseen1/toori-server/actions/workflows/ghcr.yml)
+[![PyPI Release](https://github.com/kokseen1/toori-server/actions/workflows/release.yml/badge.svg)](https://github.com/kokseen1/toori-server/actions/workflows/release.yml)
 [![PyPI Version](https://img.shields.io/pypi/v/toori-server.svg)](https://pypi.python.org/pypi/toori-server/)
 
 Server for a minimal layer 3 tunnel over http(s).
