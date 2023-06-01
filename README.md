@@ -26,6 +26,37 @@ sudo iptables -A OUTPUT -p tcp --tcp-flags RST RST -s <local address> -j DROP
 pip3 install toori-server --no-binary :all:
 ```
 
+## Deploying with Docker
+
+Instead of installing toori-server on the host, it can alternatively be deployed as a Docker container.
+
+Pull from GHCR:
+
+```shell
+sudo docker pull ghcr.io/kokseen1/toori-server:latest
+```
+
+Run the container:
+
+```shell
+sudo docker run -d --cap-add=NET_ADMIN -p 80:80 ghcr.io/kokseen1/toori-server
+```
+
+#### HTTPS
+
+To deploy with HTTPS, modify `docker-entrypoint.sh` to point to the certs directory:
+
+```shell
+iro 443 -c /path/to/certs/
+# iro 80
+```
+
+Run the container:
+
+```shell
+docker run -d -v /etc/letsencrypt:/path/to/certs --cap-add=NET_ADMIN -p 443:443 ghcr.io/kokseen1/toori-server
+```
+
 ## Usage
 
 Run with root permissions:
@@ -40,16 +71,4 @@ Example with HTTPS:
 iro 443 -c "/etc/letsencrypt/live/toori.server/"
 ```
 
-### Docker
 
-Build the image:
-
-```shell
-sudo docker build . -t toori-server
-```
-
-Run the container:
-
-```shell
-sudo docker run -d --cap-add=NET_ADMIN -p 80:80 toori-server
-```
