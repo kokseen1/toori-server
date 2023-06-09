@@ -4,6 +4,7 @@ from collections import deque
 import socketio
 from scapy.all import (
     AsyncSniffer,
+    get_if_list,
     get_if_addr,
     conf,
     IP,
@@ -195,11 +196,16 @@ async def background_sender(app):
 
 
 def start(port, certs_dir=None):
+    target_ifaces = [conf.iface]
+    if "lo" in get_if_list():
+        target_ifaces.append("lo")
 
     AsyncSniffer(
-        filter=f"src host not {LOCAL_IP} and ip and dst port not {port} and dst port not 22",
+        # Only capture return traffic belonging to the client (likely not dst port 1-1024)
+        filter=f"ip && dst host {LOCAL_IP} && dst port not {port} && dst port not 22",
         store=False,
         prn=lambda pkt: handle_inbound_packet(pkt),
+        iface=target_ifaces,
     ).start()
 
     app.add_task(background_sender)
