@@ -1,4 +1,7 @@
+from concurrent.futures import ThreadPoolExecutor
 import struct
+from fcntl import ioctl
+
 import socket
 from collections import deque
 import socketio
@@ -18,6 +21,7 @@ from engineio.payload import Payload
 
 Payload.max_decode_packets = 2500000
 
+TUN_IP = "192.0.2.2"
 LOCAL_IP = get_if_addr(conf.iface)
 conf.layers.filter([IP, TCP, UDP])
 
@@ -35,30 +39,29 @@ virtual_ip_map = dict()
 
 NEXT_VIP = 0xC6120000
 
+tun = openTun(b"tun0")
 
-try:
-    import _iro
+def openTun(tunName):
+    tun = open("/dev/net/tun", "r+b", buffering=0)
+    LINUX_IFF_TUN = 0x0001
+    LINUX_IFF_NO_PI = 0x1000
+    LINUX_TUNSETIFF = 0x400454CA
+    flags = LINUX_IFF_TUN | LINUX_IFF_NO_PI
+    ifs = struct.pack("16sH22s", tunName, flags, b"")
+    ioctl(tun, LINUX_TUNSETIFF, ifs)
+    return tun
 
-    def inj_fn(ip_layer):
+def inj_fn(ip_layer):
 
-        _iro.inj(bytes(ip_layer))
+    # Force recalculaton of layer checksums
+    if ip_layer.haslayer(IP):
+        del ip_layer[IP].chksum
+    if ip_layer.haslayer(TCP):
+        del ip_layer[TCP].chksum
+    if ip_layer.haslayer(UDP):
+        del ip_layer[UDP].chksum
 
-except ModuleNotFoundError:
-    print(f"Iro was not installed with Libtins. Using Scapy for sending.")
-
-    scapy_l3_socket = conf.L3socket()
-
-    def inj_fn(ip_layer):
-
-        # Force recalculaton of layer checksums
-        if ip_layer.haslayer(IP):
-            del ip_layer[IP].chksum
-        if ip_layer.haslayer(TCP):
-            del ip_layer[TCP].chksum
-        if ip_layer.haslayer(UDP):
-            del ip_layer[UDP].chksum
-
-        scapy_l3_socket.send(ip_layer)
+    tun.write(bytes(ip_layer))
 
 
 @sio.on("out")
@@ -113,7 +116,7 @@ async def handle_outbound(sid, data):
 
         pkt.sport = fake_sport
 
-    pkt.src = LOCAL_IP
+    pkt.src = TUN_IP
     inj_fn(pkt)
 
 
@@ -166,10 +169,11 @@ def disconnect(sid):
         if sid == fnat_key[1]:
             del forward_nat[fnat_key]
 
-
-def handle_inbound_packet(pkt):
-    packets.appendleft(pkt[IP])
-
+def read_tun(loop):
+    reply = tun.read(4096)
+    #print(IP(reply))
+    #loop.create_task(sio.emit("in", reply))
+    packets.appendleft(IP(reply))
 
 async def background_sender(app):
     while True:
@@ -194,20 +198,11 @@ async def background_sender(app):
 
         await sio.emit("in", bytes(pkt), to=sid)
 
+@app.listener("after_server_start")
+async def listener_3(app, loop):
+    ret = loop.add_reader(tun, read_tun, loop)
 
 def start(port, certs_dir=None):
-    target_ifaces = [conf.iface]
-    if "lo" in get_if_list():
-        target_ifaces.append("lo")
-
-    AsyncSniffer(
-        # Only capture return traffic belonging to the client (likely not dst port 1-1024)
-        filter=f"ip && dst host {LOCAL_IP} && dst port not {port} && dst port not 22",
-        store=False,
-        prn=lambda pkt: handle_inbound_packet(pkt),
-        iface=target_ifaces,
-    ).start()
-
     app.add_task(background_sender)
     app.run(
         "::",
@@ -217,3 +212,4 @@ def start(port, certs_dir=None):
         single_process=True,
         ssl=certs_dir,
     )
+    
