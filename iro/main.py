@@ -1,3 +1,5 @@
+import time
+import os
 from concurrent.futures import ThreadPoolExecutor
 import struct
 from fcntl import ioctl
@@ -21,8 +23,6 @@ from engineio.payload import Payload
 
 Payload.max_decode_packets = 2500000
 
-TUN_IP = "192.0.2.2"
-LOCAL_IP = get_if_addr(conf.iface)
 conf.layers.filter([IP, TCP, UDP])
 
 app = Sanic("Iro")
@@ -39,18 +39,21 @@ virtual_ip_map = dict()
 
 NEXT_VIP = 0xC6120000
 
+LINUX_TUNSETIFF = 0x400454CA
+LINUX_IFF_TUN = 0x0001
+LINUX_IFF_NO_PI = 0x1000
+LINUX_IFF_MULTI_QUEUE = 0x0100
 
-def openTun(tunName):
-    tun = open("/dev/net/tun", "r+b", buffering=0)
-    LINUX_IFF_TUN = 0x0001
-    LINUX_IFF_NO_PI = 0x1000
-    LINUX_TUNSETIFF = 0x400454CA
-    flags = LINUX_IFF_TUN | LINUX_IFF_NO_PI
-    ifs = struct.pack("16sH22s", tunName, flags, b"")
-    ioctl(tun, LINUX_TUNSETIFF, ifs)
-    return tun
+TUN_NAME = "tun0"
+TUN_IP = "192.0.2.2"
 
-tun = openTun(b"tun0")
+#os.system(f"ip tuntap add name {TUN_NAME} mode tun")
+#os.system(f"ip link set {TUN_NAME} up")
+#os.system(f"ip addr add 192.0.2.1 peer {TUN_IP} dev {TUN_NAME}")
+
+tun = open("/dev/net/tun", "r+b", buffering=0)
+ifs = struct.pack("16sH22s", TUN_NAME.encode(), LINUX_IFF_TUN | LINUX_IFF_NO_PI, b"")
+ioctl(tun, LINUX_TUNSETIFF, ifs)
 
 def inj_fn(ip_layer):
 
@@ -121,10 +124,6 @@ async def handle_outbound(sid, data):
     inj_fn(pkt)
 
 
-def hextoa(addr_hex):
-    return socket.inet_ntoa(struct.pack(">I", addr_hex))
-
-
 async def assign(sid, local_ip, virtual_ip):
     virtual_ip_map[virtual_ip] = (local_ip, sid)
     virtual_ip_map[(local_ip, sid)] = virtual_ip
@@ -171,7 +170,7 @@ def disconnect(sid):
             del forward_nat[fnat_key]
 
 def read_tun(loop):
-    reply = tun.read(4096)
+    reply = tun.read(2048)
     #print(IP(reply))
     #loop.create_task(sio.emit("in", reply))
     packets.appendleft(IP(reply))
