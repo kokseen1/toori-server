@@ -39,7 +39,6 @@ virtual_ip_map = dict()
 
 NEXT_VIP = 0xC6120000
 
-tun = openTun(b"tun0")
 
 def openTun(tunName):
     tun = open("/dev/net/tun", "r+b", buffering=0)
@@ -50,6 +49,8 @@ def openTun(tunName):
     ifs = struct.pack("16sH22s", tunName, flags, b"")
     ioctl(tun, LINUX_TUNSETIFF, ifs)
     return tun
+
+tun = openTun(b"tun0")
 
 def inj_fn(ip_layer):
 
