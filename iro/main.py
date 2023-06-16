@@ -1,6 +1,6 @@
+from anyio import wrap_file, run
 import time
 import os
-from concurrent.futures import ThreadPoolExecutor
 import struct
 from fcntl import ioctl
 
@@ -51,21 +51,10 @@ TUN_IP = "192.0.2.2"
 #os.system(f"ip link set {TUN_NAME} up")
 #os.system(f"ip addr add 192.0.2.1 peer {TUN_IP} dev {TUN_NAME}")
 
+
 tun = open("/dev/net/tun", "r+b", buffering=0)
-ifs = struct.pack("16sH22s", TUN_NAME.encode(), LINUX_IFF_TUN | LINUX_IFF_NO_PI, b"")
+ifs = struct.pack("16sh22s", TUN_NAME.encode(), LINUX_IFF_TUN | LINUX_IFF_NO_PI, b"")
 ioctl(tun, LINUX_TUNSETIFF, ifs)
-
-def inj_fn(ip_layer):
-
-    # Force recalculaton of layer checksums
-    if ip_layer.haslayer(IP):
-        del ip_layer[IP].chksum
-    if ip_layer.haslayer(TCP):
-        del ip_layer[TCP].chksum
-    if ip_layer.haslayer(UDP):
-        del ip_layer[UDP].chksum
-
-    tun.write(bytes(ip_layer))
 
 
 @sio.on("out")
@@ -121,7 +110,17 @@ async def handle_outbound(sid, data):
         pkt.sport = fake_sport
 
     pkt.src = TUN_IP
-    inj_fn(pkt)
+
+    # Force recalculaton of layer checksums
+    if pkt.haslayer(IP):
+        del pkt[IP].chksum
+    if pkt.haslayer(TCP):
+        del pkt[TCP].chksum
+    if pkt.haslayer(UDP):
+        del pkt[UDP].chksum
+
+    tun.write(bytes(pkt))
+
 
 
 async def assign(sid, local_ip, virtual_ip):
@@ -156,9 +155,9 @@ def disconnect(sid):
     virtual_ip = virtual_ip_map.get(sid)
     if sid is not None:
         vip_map_value = virtual_ip_map.get(virtual_ip)
-        del virtual_ip_map[vip_map_value]
-        del virtual_ip_map[virtual_ip]
-        del virtual_ip_map[sid]
+        virtual_ip_map.pop(vip_map_value,None)
+        virtual_ip_map.pop(virtual_ip,None)
+        virtual_ip_map.pop(sid,None)
 
 
     for rnat_key, rnat_value in return_nat.copy().items():
@@ -169,11 +168,6 @@ def disconnect(sid):
         if sid == fnat_key[1]:
             del forward_nat[fnat_key]
 
-def read_tun(loop):
-    reply = tun.read(2048)
-    #print(IP(reply))
-    #loop.create_task(sio.emit("in", reply))
-    packets.appendleft(IP(reply))
 
 async def background_sender(app):
     while True:
@@ -198,9 +192,29 @@ async def background_sender(app):
 
         await sio.emit("in", bytes(pkt), to=sid)
 
-@app.listener("after_server_start")
-async def listener_3(app, loop):
-    ret = loop.add_reader(tun, read_tun, loop)
+#@app.listener("after_server_start")
+async def background_sender(app):
+    while True:
+        #await asyncio.sleep(0)
+        pkt_bytes = await wrap_file(tun).read(2048)
+        pkt = IP(pkt_bytes)
+        #loop.create_task(sio.emit("in", reply))
+    
+        sid = None
+    
+        if pkt.haslayer(TCP) or pkt.haslayer(UDP):
+    
+            rnat_value = return_nat.get((pkt.dport, pkt.src, pkt.sport))
+    
+            # Incoming packet without mapping
+            if rnat_value is None:
+                continue
+    
+            pkt.dport, sid = rnat_value
+    
+        #loop.run_until_complete(sio.emit("in", bytes(pkt), to=sid))
+        await sio.emit("in", bytes(pkt), to=sid)
+ 
 
 def start(port, certs_dir=None):
     app.add_task(background_sender)
@@ -212,4 +226,4 @@ def start(port, certs_dir=None):
         single_process=True,
         ssl=certs_dir,
     )
-    
+   
