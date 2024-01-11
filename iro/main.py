@@ -152,10 +152,9 @@ def disconnect(sid):
 
     virtual_ip = virtual_ip_map.get(sid)
     if sid is not None:
-        vip_map_value = virtual_ip_map.get(virtual_ip)
-        del virtual_ip_map[vip_map_value]
-        del virtual_ip_map[virtual_ip]
-        del virtual_ip_map[sid]
+        vip_map_value = virtual_ip_map.pop(virtual_ip, None)
+        virtual_ip_map.pop(vip_map_value, None)
+        virtual_ip_map.pop(sid, None)
 
 
     for rnat_key, rnat_value in return_nat.copy().items():
